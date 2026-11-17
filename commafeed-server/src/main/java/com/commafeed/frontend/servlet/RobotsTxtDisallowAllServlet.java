@@ -1,22 +1,19 @@
 package com.commafeed.frontend.servlet;
 
-import java.io.IOException;
+import com.commafeed.frontend.http.Reply;
+import com.commafeed.frontend.http.Request;
 
 import jakarta.inject.Singleton;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
+/**
+ * Tells web crawlers to stay away. Registered only when the configuration asks for it.
+ */
 @Singleton
-public class RobotsTxtDisallowAllServlet extends HttpServlet {
-
-	private static final long serialVersionUID = 1L;
+public class RobotsTxtDisallowAllServlet implements Servlets.Servlet {
 
 	@Override
-	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-		resp.setContentType("text/plain");
-		resp.getWriter().write("User-agent: *");
-		resp.getWriter().write("\n");
-		resp.getWriter().write("Disallow: /");
+	public Reply get(Request request) {
+		return Servlets.text(request, "text/plain", "User-agent: *\nDisallow: /");
 	}
+
 }

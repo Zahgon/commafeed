@@ -6,56 +6,58 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import com.commafeed.frontend.http.Request;
+import com.commafeed.frontend.http.RequestTarget;
+import com.commafeed.frontend.http.Session;
+import com.commafeed.frontend.http.SessionStore;
 
 class SessionHelperTest {
 
+	private static Request request() {
+		return new Request("GET", RequestTarget.of("/", null), java.util.Map.of(), new byte[0]);
+	}
+
 	@Test
 	void gettingUserDoesNotCreateSession() {
-		HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+		SessionStore sessions = Mockito.mock(SessionStore.class);
+		Request request = request();
 
-		SessionHelper sessionHelper = new SessionHelper(request);
-		sessionHelper.getLoggedInUserId();
+		new SessionHelper(request, sessions).getLoggedInUserId();
 
-		Mockito.verify(request).getSession(false);
+		Mockito.verify(sessions).find(request);
+		Mockito.verify(sessions, Mockito.never()).findOrCreate(request);
 	}
 
 	@Test
-	void gettingUserShouldNotReturnUserIfThereIsNoPreexistingHttpSession() {
-		HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
-		Mockito.when(request.getSession(false)).thenReturn(null);
+	void gettingUserShouldNotReturnUserIfThereIsNoPreexistingSession() {
+		SessionStore sessions = Mockito.mock(SessionStore.class);
+		Mockito.when(sessions.find(Mockito.any(Request.class))).thenReturn(null);
 
-		SessionHelper sessionHelper = new SessionHelper(request);
-		Optional<Long> userId = sessionHelper.getLoggedInUserId();
+		Optional<Long> userId = new SessionHelper(request(), sessions).getLoggedInUserId();
 
 		Assertions.assertFalse(userId.isPresent());
 	}
 
 	@Test
-	void gettingUserShouldNotReturnUserIfUserNotPresentInHttpSession() {
-		HttpSession session = Mockito.mock(HttpSession.class);
+	void gettingUserShouldNotReturnUserIfUserNotPresentInSession() {
+		Session session = Mockito.mock(Session.class);
 		Mockito.when(session.getAttribute(SessionHelper.SESSION_KEY_USER_ID)).thenReturn(null);
+		SessionStore sessions = Mockito.mock(SessionStore.class);
+		Mockito.when(sessions.find(Mockito.any(Request.class))).thenReturn(session);
 
-		HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
-		Mockito.when(request.getSession(false)).thenReturn(session);
-
-		SessionHelper sessionHelper = new SessionHelper(request);
-		Optional<Long> userId = sessionHelper.getLoggedInUserId();
+		Optional<Long> userId = new SessionHelper(request(), sessions).getLoggedInUserId();
 
 		Assertions.assertFalse(userId.isPresent());
 	}
 
 	@Test
-	void gettingUserShouldReturnUserIfUserPresentInHttpSession() {
-		HttpSession session = Mockito.mock(HttpSession.class);
+	void gettingUserShouldReturnUserIfUserPresentInSession() {
+		Session session = Mockito.mock(Session.class);
 		Mockito.when(session.getAttribute(SessionHelper.SESSION_KEY_USER_ID)).thenReturn(1L);
+		SessionStore sessions = Mockito.mock(SessionStore.class);
+		Mockito.when(sessions.find(Mockito.any(Request.class))).thenReturn(session);
 
-		HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
-		Mockito.when(request.getSession(false)).thenReturn(session);
-
-		SessionHelper sessionHelper = new SessionHelper(request);
-		Optional<Long> userId = sessionHelper.getLoggedInUserId();
+		Optional<Long> userId = new SessionHelper(request(), sessions).getLoggedInUserId();
 
 		Assertions.assertTrue(userId.isPresent());
 	}

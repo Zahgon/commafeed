@@ -4,6 +4,7 @@ import com.commafeed.backend.dao.UnitOfWork;
 import com.commafeed.backend.dao.UserDAO;
 import com.commafeed.backend.dao.UserSettingsDAO;
 import com.commafeed.backend.model.UserSettings;
+import com.commafeed.frontend.http.SessionStore;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -11,11 +12,9 @@ import jakarta.inject.Singleton;
 @Singleton
 public class CustomJsServlet extends AbstractCustomCodeServlet {
 
-	private static final long serialVersionUID = 1L;
-
 	@Inject
-	public CustomJsServlet(UnitOfWork unitOfWork, UserDAO userDAO, UserSettingsDAO userSettingsDAO) {
-		super(unitOfWork, userDAO, userSettingsDAO);
+	public CustomJsServlet(UnitOfWork unitOfWork, UserDAO userDAO, UserSettingsDAO userSettingsDAO, SessionStore sessions) {
+		super(unitOfWork, userDAO, userSettingsDAO, sessions);
 	}
 
 	@Override

@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hc.client5.http.ConnectTimeoutException;
-import org.eclipse.jetty.http.HttpStatus;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,9 +55,7 @@ class HttpGetterTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(
-			ints = { HttpStatus.UNAUTHORIZED_401, HttpStatus.FORBIDDEN_403, HttpStatus.NOT_FOUND_404,
-					HttpStatus.INTERNAL_SERVER_ERROR_500 })
+	@ValueSource(ints = { 401, 403, 404, 500 })
 	void errorCodes(int code) {
 		this.mockServerClient.when(HttpRequest.request().withMethod("GET")).respond(HttpResponse.response().withStatusCode(code));
 
@@ -85,9 +82,7 @@ class HttpGetterTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(
-			ints = { HttpStatus.MOVED_PERMANENTLY_301, HttpStatus.MOVED_TEMPORARILY_302, HttpStatus.TEMPORARY_REDIRECT_307,
-					HttpStatus.PERMANENT_REDIRECT_308 })
+	@ValueSource(ints = { 301, 302, 307, 308 })
 	void followRedirects(int code) throws Exception {
 		// first redirect
 		this.mockServerClient.when(HttpRequest.request().withMethod("GET").withPath("/"))
@@ -137,7 +132,7 @@ class HttpGetterTest {
 	@Test
 	void lastModifiedReturns304() {
 		this.mockServerClient.when(HttpRequest.request().withMethod("GET").withHeader(HttpHeaders.IF_MODIFIED_SINCE, "123456"))
-				.respond(HttpResponse.response().withStatusCode(HttpStatus.NOT_MODIFIED_304));
+				.respond(HttpResponse.response().withStatusCode(304));
 
 		Assertions.assertThrows(NotModifiedException.class, () -> getter.getBinary(this.feedUrl, "123456", null, TIMEOUT));
 	}
@@ -145,7 +140,7 @@ class HttpGetterTest {
 	@Test
 	void eTagReturns304() {
 		this.mockServerClient.when(HttpRequest.request().withMethod("GET").withHeader(HttpHeaders.IF_NONE_MATCH, "78910"))
-				.respond(HttpResponse.response().withStatusCode(HttpStatus.NOT_MODIFIED_304));
+				.respond(HttpResponse.response().withStatusCode(304));
 
 		Assertions.assertThrows(NotModifiedException.class, () -> getter.getBinary(this.feedUrl, null, "78910", TIMEOUT));
 	}

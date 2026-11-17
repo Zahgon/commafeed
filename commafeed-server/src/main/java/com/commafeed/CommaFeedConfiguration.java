@@ -7,12 +7,13 @@ import java.time.temporal.ChronoUnit;
 import java.util.Properties;
 
 import com.commafeed.backend.cache.RedisPoolFactory;
+import com.commafeed.config.DataSourceFactory;
+import com.commafeed.config.Duration;
+import com.commafeed.config.LoggingSettings;
+import com.commafeed.config.ServerSettings;
 import com.commafeed.frontend.session.SessionHandlerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import io.dropwizard.core.Configuration;
-import io.dropwizard.db.DataSourceFactory;
-import io.dropwizard.util.Duration;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -23,11 +24,21 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class CommaFeedConfiguration extends Configuration {
+public class CommaFeedConfiguration {
 
 	public enum CacheType {
 		NOOP, REDIS
 	}
+
+	@Valid
+	@NotNull
+	@JsonProperty("server")
+	private final ServerSettings serverSettings = new ServerSettings();
+
+	@Valid
+	@NotNull
+	@JsonProperty("logging")
+	private final LoggingSettings loggingSettings = new LoggingSettings();
 
 	@Valid
 	@NotNull

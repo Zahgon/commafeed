@@ -30,6 +30,16 @@ import com.commafeed.backend.model.UserSettings.ReadingOrder;
 import com.commafeed.backend.service.FeedEntryService;
 import com.commafeed.backend.service.FeedSubscriptionService;
 import com.commafeed.frontend.auth.SecurityCheck;
+import com.commafeed.frontend.http.Answer;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.Status;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.DefaultValue;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.Produces;
+import com.commafeed.frontend.http.annotation.QueryParam;
 import com.commafeed.frontend.model.Category;
 import com.commafeed.frontend.model.Entries;
 import com.commafeed.frontend.model.Entry;
@@ -46,7 +56,6 @@ import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.feed.synd.SyndFeedImpl;
 import com.rometools.rome.io.SyndFeedOutput;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -57,16 +66,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DefaultValue;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -92,13 +91,12 @@ public class CategoryREST {
 
 	@Path("/entries")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Get category entries",
 			description = "Get a list of category entries",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Entries.class))) })
 	@Timed
-	public Response getCategoryEntries(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
+	public Answer getCategoryEntries(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
 			@Parameter(description = "id of the category, 'all' or 'starred'", required = true) @QueryParam("id") String id,
 			@Parameter(
 					description = "all entries or only unread ones",
@@ -168,7 +166,7 @@ public class CategoryREST {
 				}
 				entries.setName(parent.getName());
 			} else {
-				return Response.status(Status.NOT_FOUND).entity("<message>category not found</message>").build();
+				return Answer.status(Status.NOT_FOUND).entity("<message>category not found</message>").build();
 			}
 		}
 
@@ -181,16 +179,15 @@ public class CategoryREST {
 		entries.setTimestamp(System.currentTimeMillis());
 		entries.setIgnoredReadStatus(STARRED.equals(id) || keywords != null || tag != null);
 		FeedUtils.removeUnwantedFromSearch(entries.getEntries(), entryKeywords);
-		return Response.ok(entries).build();
+		return Answer.ok(entries).build();
 	}
 
 	@Path("/entriesAsFeed")
 	@GET
-	@UnitOfWork
 	@Operation(summary = "Get category entries as feed", description = "Get a feed of category entries")
 	@Produces(MediaType.APPLICATION_XML)
 	@Timed
-	public Response getCategoryEntriesAsFeed(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
+	public Answer getCategoryEntriesAsFeed(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
 			@Parameter(description = "id of the category, 'all' or 'starred'", required = true) @QueryParam("id") String id,
 			@Parameter(
 					description = "all entries or only unread ones",
@@ -205,8 +202,8 @@ public class CategoryREST {
 					description = "comma-separated list of excluded subscription ids") @QueryParam("excludedSubscriptionIds") String excludedSubscriptionIds,
 			@Parameter(description = "keep only entries tagged with this tag") @QueryParam("tag") String tag) {
 
-		Response response = getCategoryEntries(user, id, readType, newerThan, offset, limit, order, keywords, excludedSubscriptionIds, tag);
-		if (response.getStatus() != Status.OK.getStatusCode()) {
+		Answer response = getCategoryEntries(user, id, readType, newerThan, offset, limit, order, keywords, excludedSubscriptionIds, tag);
+		if (response.getStatus() != Status.OK.getCode()) {
 			return response;
 		}
 		Entries entries = (Entries) response.getEntity();
@@ -226,15 +223,14 @@ public class CategoryREST {
 			writer.write("Could not get feed information");
 			log.error(e.getMessage(), e);
 		}
-		return Response.ok(writer.toString()).build();
+		return Answer.ok(writer.toString()).build();
 	}
 
 	@Path("/mark")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Mark category entries", description = "Mark feed entries of this category as read")
 	@Timed
-	public Response markCategoryEntries(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer markCategoryEntries(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "category id, or 'all'", required = true) MarkRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -257,7 +253,7 @@ public class CategoryREST {
 			removeExcludedSubscriptions(subs, req.getExcludedSubscriptions());
 			feedEntryService.markSubscriptionEntries(user, subs, olderThan, insertedBefore, entryKeywords);
 		}
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	private void removeExcludedSubscriptions(List<FeedSubscription> subs, List<Long> excludedIds) {
@@ -268,13 +264,12 @@ public class CategoryREST {
 
 	@Path("/add")
 	@POST
-	@UnitOfWork
 	@Operation(
 			summary = "Add a category",
 			description = "Add a new feed category",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Long.class))) })
 	@Timed
-	public Response addCategory(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer addCategory(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(required = true) AddCategoryRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getName());
@@ -291,15 +286,14 @@ public class CategoryREST {
 		}
 		feedCategoryDAO.saveOrUpdate(cat);
 		cache.invalidateUserRootCategory(user);
-		return Response.ok(cat.getId()).build();
+		return Answer.ok(cat.getId()).build();
 	}
 
 	@POST
 	@Path("/delete")
-	@UnitOfWork
 	@Operation(summary = "Delete a category", description = "Delete an existing feed category")
 	@Timed
-	public Response deleteCategory(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) IDRequest req) {
+	public Answer deleteCategory(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) IDRequest req) {
 
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -321,18 +315,17 @@ public class CategoryREST {
 
 			feedCategoryDAO.delete(cat);
 			cache.invalidateUserRootCategory(user);
-			return Response.ok().build();
+			return Answer.ok().build();
 		} else {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 	}
 
 	@POST
 	@Path("/modify")
-	@UnitOfWork
 	@Operation(summary = "Rename a category", description = "Rename an existing feed category")
 	@Timed
-	public Response modifyCategory(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer modifyCategory(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(required = true) CategoryModificationRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -375,49 +368,46 @@ public class CategoryREST {
 
 		feedCategoryDAO.saveOrUpdate(category);
 		cache.invalidateUserRootCategory(user);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@POST
 	@Path("/collapse")
-	@UnitOfWork
 	@Operation(summary = "Collapse a category", description = "Save collapsed or expanded status for a category")
 	@Timed
-	public Response collapseCategory(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) CollapseRequest req) {
+	public Answer collapseCategory(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) CollapseRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
 
 		FeedCategory category = feedCategoryDAO.findById(user, req.getId());
 		if (category == null) {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 		category.setCollapsed(req.isCollapse());
 		feedCategoryDAO.saveOrUpdate(category);
 		cache.invalidateUserRootCategory(user);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@GET
 	@Path("/unreadCount")
-	@UnitOfWork
 	@Operation(
 			summary = "Get unread count for feed subscriptions",
 			responses = { @ApiResponse(content = @Content(array = @ArraySchema(schema = @Schema(implementation = UnreadCount.class)))) })
 	@Timed
-	public Response getUnreadCount(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user) {
+	public Answer getUnreadCount(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user) {
 		Map<Long, UnreadCount> unreadCount = feedSubscriptionService.getUnreadCount(user);
-		return Response.ok(Lists.newArrayList(unreadCount.values())).build();
+		return Answer.ok(Lists.newArrayList(unreadCount.values())).build();
 	}
 
 	@GET
 	@Path("/get")
-	@UnitOfWork
 	@Operation(
 			summary = "Get root category",
 			description = "Get all categories and subscriptions of the user",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Category.class))) })
 	@Timed
-	public Response getRootCategory(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer getRootCategory(@Parameter(hidden = true) @SecurityCheck User user) {
 		Category root = cache.getUserRootCategory(user);
 		if (root == null) {
 			log.debug("tree cache miss for {}", user.getId());
@@ -431,7 +421,7 @@ public class CategoryREST {
 			cache.setUserRootCategory(user, root);
 		}
 
-		return Response.ok(root).build();
+		return Answer.ok(root).build();
 	}
 
 	private Category buildCategory(Long id, List<FeedCategory> categories, List<FeedSubscription> subscriptions,

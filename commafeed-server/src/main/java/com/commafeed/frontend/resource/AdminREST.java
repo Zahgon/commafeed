@@ -19,13 +19,21 @@ import com.commafeed.backend.model.UserRole.Role;
 import com.commafeed.backend.service.PasswordEncryptionService;
 import com.commafeed.backend.service.UserService;
 import com.commafeed.frontend.auth.SecurityCheck;
+import com.commafeed.frontend.http.Answer;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.Status;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.PathParam;
+import com.commafeed.frontend.http.annotation.Produces;
 import com.commafeed.frontend.model.UserModel;
 import com.commafeed.frontend.model.request.AdminSaveUserRequest;
 import com.commafeed.frontend.model.request.IDRequest;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -35,15 +43,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.Status;
 import lombok.RequiredArgsConstructor;
 
 @Path("/admin")
@@ -63,12 +62,11 @@ public class AdminREST {
 
 	@Path("/user/save")
 	@POST
-	@UnitOfWork
 	@Operation(
 			summary = "Save or update a user",
 			description = "Save or update a user. If the id is not specified, a new user will be created")
 	@Timed
-	public Response adminSaveUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
+	public Answer adminSaveUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
 			@Parameter(required = true) AdminSaveUserRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getName());
@@ -84,11 +82,11 @@ public class AdminREST {
 			try {
 				userService.register(req.getName(), req.getPassword(), req.getEmail(), roles, true);
 			} catch (Exception e) {
-				return Response.status(Status.CONFLICT).entity(e.getMessage()).build();
+				return Answer.status(Status.CONFLICT).entity(e.getMessage()).build();
 			}
 		} else {
 			if (req.getId().equals(user.getId()) && !req.isEnabled()) {
-				return Response.status(Status.FORBIDDEN).entity("You cannot disable your own account.").build();
+				return Answer.status(Status.FORBIDDEN).entity("You cannot disable your own account.").build();
 			}
 
 			User u = userDAO.findById(id);
@@ -105,7 +103,7 @@ public class AdminREST {
 				userRoleDAO.saveOrUpdate(new UserRole(u, Role.ADMIN));
 			} else if (!req.isAdmin() && roles.contains(Role.ADMIN)) {
 				if (CommaFeedApplication.USERNAME_ADMIN.equals(u.getName())) {
-					return Response.status(Status.FORBIDDEN).entity("You cannot remove the admin role from the admin user.").build();
+					return Answer.status(Status.FORBIDDEN).entity("You cannot remove the admin role from the admin user.").build();
 				}
 				for (UserRole userRole : userRoleDAO.findAll(u)) {
 					if (userRole.getRole() == Role.ADMIN) {
@@ -115,19 +113,18 @@ public class AdminREST {
 			}
 
 		}
-		return Response.ok().build();
+		return Answer.ok().build();
 
 	}
 
 	@Path("/user/get/{id}")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Get user information",
 			description = "Get user information",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = UserModel.class))) })
 	@Timed
-	public Response adminGetUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
+	public Answer adminGetUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
 			@Parameter(description = "user id", required = true) @PathParam("id") Long id) {
 		Preconditions.checkNotNull(id);
 		User u = userDAO.findById(id);
@@ -137,18 +134,17 @@ public class AdminREST {
 		userModel.setEmail(u.getEmail());
 		userModel.setEnabled(!u.isDisabled());
 		userModel.setAdmin(userRoleDAO.findAll(u).stream().anyMatch(r -> r.getRole() == Role.ADMIN));
-		return Response.ok(userModel).build();
+		return Answer.ok(userModel).build();
 	}
 
 	@Path("/user/getAll")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Get all users",
 			description = "Get all users",
 			responses = { @ApiResponse(content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserModel.class)))) })
 	@Timed
-	public Response adminGetUsers(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
+	public Answer adminGetUsers(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
 		Map<Long, UserModel> users = new HashMap<>();
 		for (UserRole role : userRoleDAO.findAll()) {
 			User u = role.getUser();
@@ -168,49 +164,46 @@ public class AdminREST {
 				userModel.setAdmin(true);
 			}
 		}
-		return Response.ok(users.values()).build();
+		return Answer.ok(users.values()).build();
 	}
 
 	@Path("/user/delete")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Delete a user", description = "Delete a user, and all his subscriptions")
 	@Timed
-	public Response adminDeleteUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
+	public Answer adminDeleteUser(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user,
 			@Parameter(required = true) IDRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
 
 		User u = userDAO.findById(req.getId());
 		if (u == null) {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 		if (user.getId().equals(u.getId())) {
-			return Response.status(Status.FORBIDDEN).entity("You cannot delete your own user.").build();
+			return Answer.status(Status.FORBIDDEN).entity("You cannot delete your own user.").build();
 		}
 		userService.unregister(u);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/settings")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Retrieve application settings",
 			description = "Retrieve application settings",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = ApplicationSettings.class))) })
 	@Timed
-	public Response getApplicationSettings(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
-		return Response.ok(config.getApplicationSettings()).build();
+	public Answer getApplicationSettings(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
+		return Answer.ok(config.getApplicationSettings()).build();
 	}
 
 	@Path("/metrics")
 	@GET
-	@UnitOfWork
 	@Operation(summary = "Retrieve server metrics")
 	@Timed
-	public Response getMetrics(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
-		return Response.ok(metrics).build();
+	public Answer getMetrics(@Parameter(hidden = true) @SecurityCheck(Role.ADMIN) User user) {
+		return Answer.ok(metrics).build();
 	}
 
 }

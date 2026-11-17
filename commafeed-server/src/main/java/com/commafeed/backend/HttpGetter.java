@@ -25,7 +25,6 @@ import org.apache.hc.core5.http.io.support.ClassicRequestBuilder;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
-import org.eclipse.jetty.http.HttpStatus;
 
 import com.commafeed.CommaFeedConfiguration;
 import com.google.common.collect.Iterables;
@@ -46,6 +45,9 @@ import nl.altindag.ssl.apache5.util.Apache5SslUtils;
 @Singleton
 @Slf4j
 public class HttpGetter {
+
+	/** The status that says what was asked for has not changed since it was last fetched. */
+	private static final int NOT_MODIFIED = 304;
 
 	private final CloseableHttpClient client;
 
@@ -109,7 +111,7 @@ public class HttpGetter {
 		});
 
 		int code = response.getCode();
-		if (code == HttpStatus.NOT_MODIFIED_304) {
+		if (code == NOT_MODIFIED) {
 			throw new NotModifiedException("'304 - not modified' http code received");
 		} else if (code >= 300) {
 			throw new HttpResponseException(code, "Server returned HTTP error code " + code);

@@ -30,6 +30,17 @@ import com.commafeed.backend.service.MailService;
 import com.commafeed.backend.service.PasswordEncryptionService;
 import com.commafeed.backend.service.UserService;
 import com.commafeed.frontend.auth.SecurityCheck;
+import com.commafeed.frontend.http.Answer;
+import com.commafeed.frontend.http.AnswerException;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.Status;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.Context;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.Produces;
+import com.commafeed.frontend.http.annotation.QueryParam;
 import com.commafeed.frontend.model.Settings;
 import com.commafeed.frontend.model.UserModel;
 import com.commafeed.frontend.model.request.LoginRequest;
@@ -39,7 +50,6 @@ import com.commafeed.frontend.model.request.RegistrationRequest;
 import com.commafeed.frontend.session.SessionHelper;
 import com.google.common.base.Preconditions;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -49,17 +59,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -82,13 +81,12 @@ public class UserREST {
 
 	@Path("/settings")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Retrieve user settings",
 			description = "Retrieve user settings",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Settings.class))) })
 	@Timed
-	public Response getUserSettings(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer getUserSettings(@Parameter(hidden = true) @SecurityCheck User user) {
 		Settings s = new Settings();
 		UserSettings settings = userSettingsDAO.findByUser(user);
 		if (settings != null) {
@@ -140,15 +138,14 @@ public class UserREST {
 			s.setCustomContextMenu(true);
 			s.setMobileFooter(false);
 		}
-		return Response.ok(s).build();
+		return Answer.ok(s).build();
 	}
 
 	@Path("/settings")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Save user settings", description = "Save user settings")
 	@Timed
-	public Response saveUserSettings(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) Settings settings) {
+	public Answer saveUserSettings(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) Settings settings) {
 		Preconditions.checkNotNull(settings);
 
 		UserSettings s = userSettingsDAO.findByUser(user);
@@ -181,18 +178,17 @@ public class UserREST {
 		s.setBuffer(settings.getSharingSettings().isBuffer());
 
 		userSettingsDAO.saveOrUpdate(s);
-		return Response.ok().build();
+		return Answer.ok().build();
 
 	}
 
 	@Path("/profile")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Retrieve user's profile",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = UserModel.class))) })
 	@Timed
-	public Response getUserProfile(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer getUserProfile(@Parameter(hidden = true) @SecurityCheck User user) {
 		UserModel userModel = new UserModel();
 		userModel.setId(user.getId());
 		userModel.setName(user.getName());
@@ -204,30 +200,29 @@ public class UserREST {
 				userModel.setAdmin(true);
 			}
 		}
-		return Response.ok(userModel).build();
+		return Answer.ok(userModel).build();
 	}
 
 	@Path("/profile")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Save user's profile")
 	@Timed
-	public Response saveUserProfile(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer saveUserProfile(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(required = true) ProfileModificationRequest request) {
 		if (CommaFeedApplication.USERNAME_DEMO.equals(user.getName())) {
-			return Response.status(Status.FORBIDDEN).build();
+			return Answer.status(Status.FORBIDDEN).build();
 		}
 
 		Optional<User> login = userService.login(user.getName(), request.getCurrentPassword());
 		if (login.isEmpty()) {
-			throw new BadRequestException("invalid password");
+			throw new AnswerException("invalid password");
 		}
 
 		String email = StringUtils.trimToNull(request.getEmail());
 		if (StringUtils.isNotBlank(email)) {
 			User u = userDAO.findByEmail(email);
 			if (u != null && !user.getId().equals(u.getId())) {
-				throw new BadRequestException("email already taken");
+				throw new AnswerException("email already taken");
 			}
 			user.setEmail(email);
 		}
@@ -243,52 +238,49 @@ public class UserREST {
 		}
 
 		userDAO.update(user);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/register")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Register a new account")
 	@Timed
-	public Response registerUser(@Valid @Parameter(required = true) RegistrationRequest req,
+	public Answer registerUser(@Valid @Parameter(required = true) RegistrationRequest req,
 			@Context @Parameter(hidden = true) SessionHelper sessionHelper) {
 		try {
 			User registeredUser = userService.register(req.getName(), req.getPassword(), req.getEmail(),
 					Collections.singletonList(Role.USER));
 			userService.login(req.getName(), req.getPassword());
 			sessionHelper.setLoggedInUser(registeredUser);
-			return Response.ok().build();
+			return Answer.ok().build();
 		} catch (final IllegalArgumentException e) {
-			throw new BadRequestException(e.getMessage());
+			throw new AnswerException(e.getMessage());
 		}
 	}
 
 	@Path("/login")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Login and create a session")
 	@Timed
-	public Response login(@Valid @Parameter(required = true) LoginRequest req,
+	public Answer login(@Valid @Parameter(required = true) LoginRequest req,
 			@Parameter(hidden = true) @Context SessionHelper sessionHelper) {
 		Optional<User> user = userService.login(req.getName(), req.getPassword());
 		if (user.isPresent()) {
 			sessionHelper.setLoggedInUser(user.get());
-			return Response.ok().build();
+			return Answer.ok().build();
 		} else {
-			return Response.status(Response.Status.UNAUTHORIZED).entity("wrong username or password").type(MediaType.TEXT_PLAIN).build();
+			return Answer.status(Status.UNAUTHORIZED).entity("wrong username or password").type(MediaType.TEXT_PLAIN).build();
 		}
 	}
 
 	@Path("/passwordReset")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "send a password reset email")
 	@Timed
-	public Response sendPasswordReset(@Valid @Parameter(required = true) PasswordResetRequest req) {
+	public Answer sendPasswordReset(@Valid @Parameter(required = true) PasswordResetRequest req) {
 		User user = userDAO.findByEmail(req.getEmail());
 		if (user == null) {
-			return Response.ok().build();
+			return Answer.ok().build();
 		}
 
 		try {
@@ -296,10 +288,10 @@ public class UserREST {
 			user.setRecoverPasswordTokenDate(Instant.now());
 			userDAO.saveOrUpdate(user);
 			mailService.sendMail(user, "Password recovery", buildEmailContent(user));
-			return Response.ok().build();
+			return Answer.ok().build();
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
-			return Response.status(Status.INTERNAL_SERVER_ERROR).entity("could not send email").type(MediaType.TEXT_PLAIN).build();
+			return Answer.status(Status.INTERNAL_SERVER_ERROR).entity("could not send email").type(MediaType.TEXT_PLAIN).build();
 		}
 	}
 
@@ -321,23 +313,22 @@ public class UserREST {
 
 	@Path("/passwordResetCallback")
 	@GET
-	@UnitOfWork
 	@Produces(MediaType.TEXT_HTML)
 	@Timed
-	public Response passwordRecoveryCallback(@Parameter(required = true) @QueryParam("email") String email,
+	public Answer passwordRecoveryCallback(@Parameter(required = true) @QueryParam("email") String email,
 			@Parameter(required = true) @QueryParam("token") String token) {
 		Preconditions.checkNotNull(email);
 		Preconditions.checkNotNull(token);
 
 		User user = userDAO.findByEmail(email);
 		if (user == null) {
-			return Response.status(Status.UNAUTHORIZED).entity("Email not found.").build();
+			return Answer.status(Status.UNAUTHORIZED).entity("Email not found.").build();
 		}
 		if (user.getRecoverPasswordToken() == null || !user.getRecoverPasswordToken().equals(token)) {
-			return Response.status(Status.UNAUTHORIZED).entity("Invalid token.").build();
+			return Answer.status(Status.UNAUTHORIZED).entity("Invalid token.").build();
 		}
 		if (ChronoUnit.DAYS.between(user.getRecoverPasswordTokenDate(), Instant.now()) >= 2) {
-			return Response.status(Status.UNAUTHORIZED).entity("token expired.").build();
+			return Answer.status(Status.UNAUTHORIZED).entity("token expired.").build();
 		}
 
 		String passwd = RandomStringUtils.randomAlphanumeric(10);
@@ -353,19 +344,18 @@ public class UserREST {
 		String message = "Your new password is: " + passwd;
 		message += "<br />";
 		message += String.format("<a href=\"%s\">Back to Homepage</a>", config.getApplicationSettings().getPublicUrl());
-		return Response.ok(message).build();
+		return Answer.ok(message).build();
 	}
 
 	@Path("/profile/deleteAccount")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Delete the user account")
 	@Timed
-	public Response deleteUser(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer deleteUser(@Parameter(hidden = true) @SecurityCheck User user) {
 		if (CommaFeedApplication.USERNAME_ADMIN.equals(user.getName()) || CommaFeedApplication.USERNAME_DEMO.equals(user.getName())) {
-			return Response.status(Status.FORBIDDEN).build();
+			return Answer.status(Status.FORBIDDEN).build();
 		}
 		userService.unregister(userDAO.findById(user.getId()));
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 }

@@ -28,6 +28,7 @@ import com.commafeed.backend.task.ScheduledTask;
 import com.commafeed.backend.urlprovider.FeedURLProvider;
 import com.commafeed.backend.urlprovider.InPageReferenceFeedURLProvider;
 import com.commafeed.backend.urlprovider.YoutubeFeedURLProvider;
+import com.commafeed.frontend.http.SessionStore;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.multibindings.Multibinder;
@@ -48,6 +49,9 @@ public class CommaFeedModule extends AbstractModule {
 
 	@Getter(onMethod = @__({ @Provides }))
 	private final MetricRegistry metrics;
+
+	@Getter(onMethod = @__({ @Provides }))
+	private final SessionStore sessionStore;
 
 	@Override
 	protected void configure() {

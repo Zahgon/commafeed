@@ -16,12 +16,12 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.commafeed.CommaFeedConfiguration;
+import com.commafeed.backend.Managed;
 import com.commafeed.backend.dao.FeedDAO;
 import com.commafeed.backend.dao.UnitOfWork;
 import com.commafeed.backend.model.AbstractModel;
 import com.commafeed.backend.model.Feed;
 
-import io.dropwizard.lifecycle.Managed;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;

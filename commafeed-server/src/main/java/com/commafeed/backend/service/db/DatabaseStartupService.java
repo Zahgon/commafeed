@@ -7,11 +7,11 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 
 import com.commafeed.CommaFeedConfiguration;
+import com.commafeed.backend.Managed;
 import com.commafeed.backend.dao.UnitOfWork;
 import com.commafeed.backend.dao.UserDAO;
 import com.commafeed.backend.service.UserService;
 
-import io.dropwizard.lifecycle.Managed;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import liquibase.Scope;

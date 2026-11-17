@@ -1,6 +1,7 @@
 package com.commafeed.backend.favicon;
 
-import jakarta.ws.rs.core.MediaType;
+import com.commafeed.frontend.http.MediaType;
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class Favicon {
 
-	private static final MediaType DEFAULT_MEDIA_TYPE = MediaType.valueOf("image/x-icon");
+	private static final MediaType DEFAULT_MEDIA_TYPE = MediaType.of("image/x-icon");
 
 	private final byte[] icon;
 	private final MediaType mediaType;
@@ -21,7 +22,7 @@ public class Favicon {
 
 	private static MediaType parseMediaType(String contentType) {
 		try {
-			return MediaType.valueOf(contentType);
+			return MediaType.of(contentType);
 		} catch (Exception e) {
 			log.debug("invalid content type '{}' received, returning default value", contentType);
 			return DEFAULT_MEDIA_TYPE;

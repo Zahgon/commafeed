@@ -13,8 +13,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.glassfish.jersey.media.multipart.FormDataMultiPart;
-
 import com.codahale.metrics.annotation.Timed;
 import com.commafeed.backend.dao.FeedCategoryDAO;
 import com.commafeed.backend.dao.FeedEntryDAO;
@@ -31,26 +29,25 @@ import com.commafeed.backend.model.UserSettings.ReadingOrder;
 import com.commafeed.backend.service.FeedEntryService;
 import com.commafeed.backend.service.FeedService;
 import com.commafeed.backend.service.UserService;
+import com.commafeed.frontend.http.FormData;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.UriInformation;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.Context;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.PathParam;
+import com.commafeed.frontend.http.annotation.Produces;
 import com.commafeed.frontend.resource.fever.FeverResponse.FeverFavicon;
 import com.commafeed.frontend.resource.fever.FeverResponse.FeverFeed;
 import com.commafeed.frontend.resource.fever.FeverResponse.FeverFeedGroup;
 import com.commafeed.frontend.resource.fever.FeverResponse.FeverGroup;
 import com.commafeed.frontend.resource.fever.FeverResponse.FeverItem;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -88,12 +85,11 @@ public class FeverREST {
 	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
 	@Path(PATH)
 	@POST
-	@UnitOfWork
 	@Timed
-	public FeverResponse formUrlencoded(@Context UriInfo uri, @PathParam("userId") Long userId, MultivaluedMap<String, String> form) {
+	public FeverResponse formUrlencoded(@Context UriInformation uri, @PathParam("userId") Long userId, FormData form) {
 		Map<String, String> params = new HashMap<>();
 		uri.getQueryParameters().forEach((k, v) -> params.put(k, v.get(0)));
-		form.forEach((k, v) -> params.put(k, v.get(0)));
+		form.getFields().forEach((k, v) -> params.put(k, v.get(0)));
 		return handle(userId, params);
 	}
 
@@ -101,9 +97,8 @@ public class FeverREST {
 	// e.g. FeedMe
 	@Path(PATH)
 	@POST
-	@UnitOfWork
 	@Timed
-	public FeverResponse noForm(@Context UriInfo uri, @PathParam("userId") Long userId) {
+	public FeverResponse noForm(@Context UriInformation uri, @PathParam("userId") Long userId) {
 		Map<String, String> params = new HashMap<>();
 		uri.getQueryParameters().forEach((k, v) -> params.put(k, v.get(0)));
 		return handle(userId, params);
@@ -113,9 +108,8 @@ public class FeverREST {
 	// e.g. Unread
 	@Path(PATH)
 	@GET
-	@UnitOfWork
 	@Timed
-	public FeverResponse get(@Context UriInfo uri, @PathParam("userId") Long userId) {
+	public FeverResponse get(@Context UriInformation uri, @PathParam("userId") Long userId) {
 		Map<String, String> params = new HashMap<>();
 		uri.getQueryParameters().forEach((k, v) -> params.put(k, v.get(0)));
 		return handle(userId, params);
@@ -126,12 +120,11 @@ public class FeverREST {
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
 	@Path(PATH)
 	@POST
-	@UnitOfWork
 	@Timed
-	public FeverResponse formData(@Context UriInfo uri, @PathParam("userId") Long userId, FormDataMultiPart form) {
+	public FeverResponse formData(@Context UriInformation uri, @PathParam("userId") Long userId, FormData form) {
 		Map<String, String> params = new HashMap<>();
 		uri.getQueryParameters().forEach((k, v) -> params.put(k, v.get(0)));
-		form.getFields().forEach((k, v) -> params.put(k, v.get(0).getValue()));
+		form.getFields().forEach((k, v) -> params.put(k, v.get(0)));
 		return handle(userId, params);
 	}
 

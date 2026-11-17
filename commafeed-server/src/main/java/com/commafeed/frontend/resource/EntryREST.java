@@ -8,26 +8,25 @@ import com.commafeed.backend.model.User;
 import com.commafeed.backend.service.FeedEntryService;
 import com.commafeed.backend.service.FeedEntryTagService;
 import com.commafeed.frontend.auth.SecurityCheck;
+import com.commafeed.frontend.http.Answer;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.Produces;
 import com.commafeed.frontend.model.request.MarkRequest;
 import com.commafeed.frontend.model.request.MultipleMarkRequest;
 import com.commafeed.frontend.model.request.StarRequest;
 import com.commafeed.frontend.model.request.TagRequest;
 import com.google.common.base.Preconditions;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 
 @Path("/entry")
@@ -44,24 +43,22 @@ public class EntryREST {
 
 	@Path("/mark")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Mark a feed entry", description = "Mark a feed entry as read/unread")
 	@Timed
-	public Response markEntry(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer markEntry(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "Mark Request", required = true) MarkRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
 
 		feedEntryService.markEntry(user, Long.valueOf(req.getId()), req.isRead());
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/markMultiple")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Mark multiple feed entries", description = "Mark feed entries as read/unread")
 	@Timed
-	public Response markEntries(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer markEntries(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "Multiple Mark Request", required = true) MultipleMarkRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getRequests());
@@ -71,15 +68,14 @@ public class EntryREST {
 			feedEntryService.markEntry(user, Long.valueOf(r.getId()), r.isRead());
 		}
 
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/star")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Star a feed entry", description = "Mark a feed entry as read/unread")
 	@Timed
-	public Response starEntry(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer starEntry(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "Star Request", required = true) StarRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -87,32 +83,30 @@ public class EntryREST {
 
 		feedEntryService.starEntry(user, Long.valueOf(req.getId()), req.getFeedId(), req.isStarred());
 
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/tags")
 	@GET
-	@UnitOfWork
 	@Operation(summary = "Get list of tags for the user", description = "Get list of tags for the user")
 	@Timed
-	public Response getTags(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer getTags(@Parameter(hidden = true) @SecurityCheck User user) {
 		List<String> tags = feedEntryTagDAO.findByUser(user);
-		return Response.ok(tags).build();
+		return Answer.ok(tags).build();
 	}
 
 	@Path("/tag")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Set feed entry tags")
 	@Timed
-	public Response tagEntry(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer tagEntry(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "Tag Request", required = true) TagRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getEntryId());
 
 		feedEntryTagService.updateTags(user, req.getEntryId(), req.getTags());
 
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 }

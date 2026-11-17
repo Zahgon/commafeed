@@ -13,7 +13,6 @@ import java.util.Objects;
 
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.glassfish.jersey.media.multipart.FormDataParam;
 
 import com.codahale.metrics.annotation.Timed;
 import com.commafeed.CommaFeedApplication;
@@ -45,6 +44,20 @@ import com.commafeed.backend.service.FeedEntryService;
 import com.commafeed.backend.service.FeedService;
 import com.commafeed.backend.service.FeedSubscriptionService;
 import com.commafeed.frontend.auth.SecurityCheck;
+import com.commafeed.frontend.http.Answer;
+import com.commafeed.frontend.http.AnswerException;
+import com.commafeed.frontend.http.CacheControl;
+import com.commafeed.frontend.http.MediaType;
+import com.commafeed.frontend.http.Status;
+import com.commafeed.frontend.http.annotation.Consumes;
+import com.commafeed.frontend.http.annotation.DefaultValue;
+import com.commafeed.frontend.http.annotation.FormDataParam;
+import com.commafeed.frontend.http.annotation.GET;
+import com.commafeed.frontend.http.annotation.POST;
+import com.commafeed.frontend.http.annotation.Path;
+import com.commafeed.frontend.http.annotation.PathParam;
+import com.commafeed.frontend.http.annotation.Produces;
+import com.commafeed.frontend.http.annotation.QueryParam;
 import com.commafeed.frontend.model.Entries;
 import com.commafeed.frontend.model.Entry;
 import com.commafeed.frontend.model.FeedInfo;
@@ -63,7 +76,6 @@ import com.rometools.rome.feed.synd.SyndFeedImpl;
 import com.rometools.rome.io.SyndFeedOutput;
 import com.rometools.rome.io.WireFeedOutput;
 
-import io.dropwizard.hibernate.UnitOfWork;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -73,20 +85,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DefaultValue;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.CacheControl;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.ResponseBuilder;
-import jakarta.ws.rs.core.Response.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -129,13 +127,12 @@ public class FeedREST {
 
 	@Path("/entries")
 	@GET
-	@UnitOfWork
 	@Operation(
 			summary = "Get feed entries",
 			description = "Get a list of feed entries",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Entries.class))) })
 	@Timed
-	public Response getFeedEntries(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
+	public Answer getFeedEntries(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
 			@Parameter(description = "id of the feed", required = true) @QueryParam("id") String id,
 			@Parameter(
 					description = "all entries or only unread ones",
@@ -184,22 +181,21 @@ public class FeedREST {
 				entries.getEntries().remove(entries.getEntries().size() - 1);
 			}
 		} else {
-			return Response.status(Status.NOT_FOUND).entity("<message>feed not found</message>").build();
+			return Answer.status(Status.NOT_FOUND).entity("<message>feed not found</message>").build();
 		}
 
 		entries.setTimestamp(System.currentTimeMillis());
 		entries.setIgnoredReadStatus(keywords != null);
 		FeedUtils.removeUnwantedFromSearch(entries.getEntries(), entryKeywords);
-		return Response.ok(entries).build();
+		return Answer.ok(entries).build();
 	}
 
 	@Path("/entriesAsFeed")
 	@GET
-	@UnitOfWork
 	@Operation(summary = "Get feed entries as a feed", description = "Get a feed of feed entries")
 	@Produces(MediaType.APPLICATION_XML)
 	@Timed
-	public Response getFeedEntriesAsFeed(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
+	public Answer getFeedEntriesAsFeed(@Parameter(hidden = true) @SecurityCheck(apiKeyAllowed = true) User user,
 			@Parameter(description = "id of the feed", required = true) @QueryParam("id") String id,
 			@Parameter(
 					description = "all entries or only unread ones",
@@ -210,8 +206,8 @@ public class FeedREST {
 			@Parameter(description = "date ordering") @QueryParam("order") @DefaultValue("desc") ReadingOrder order, @Parameter(
 					description = "search for keywords in either the title or the content of the entries, separated by spaces, 3 characters minimum") @QueryParam("keywords") String keywords) {
 
-		Response response = getFeedEntries(user, id, readType, newerThan, offset, limit, order, keywords);
-		if (response.getStatus() != Status.OK.getStatusCode()) {
+		Answer response = getFeedEntries(user, id, readType, newerThan, offset, limit, order, keywords);
+		if (response.getStatus() != Status.OK.getCode()) {
 			return response;
 		}
 		Entries entries = (Entries) response.getEntity();
@@ -231,7 +227,7 @@ public class FeedREST {
 			writer.write("Could not get feed information");
 			log.error(e.getMessage(), e);
 		}
-		return Response.ok(writer.toString()).build();
+		return Answer.ok(writer.toString()).build();
 	}
 
 	private FeedInfo fetchFeedInternal(String url) {
@@ -246,20 +242,19 @@ public class FeedREST {
 
 		} catch (Exception e) {
 			log.debug(e.getMessage(), e);
-			throw new WebApplicationException(e, Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+			throw new AnswerException(e, Answer.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
 		return info;
 	}
 
 	@POST
 	@Path("/fetch")
-	@UnitOfWork
 	@Operation(
 			summary = "Fetch a feed",
 			description = "Fetch a feed by its url",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = FeedInfo.class))) })
 	@Timed
-	public Response fetchFeed(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer fetchFeed(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "feed url", required = true) FeedInfoRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getUrl());
@@ -269,30 +264,28 @@ public class FeedREST {
 			info = fetchFeedInternal(req.getUrl());
 		} catch (Exception e) {
 			Throwable cause = Throwables.getRootCause(e);
-			return Response.status(Status.INTERNAL_SERVER_ERROR)
+			return Answer.status(Status.INTERNAL_SERVER_ERROR)
 					.entity(cause.getClass().getName() + ": " + cause.getMessage())
 					.type(MediaType.TEXT_PLAIN)
 					.build();
 		}
-		return Response.ok(info).build();
+		return Answer.ok(info).build();
 	}
 
 	@Path("/refreshAll")
 	@GET
-	@UnitOfWork
 	@Operation(summary = "Queue all feeds of the user for refresh", description = "Manually add all feeds of the user to the refresh queue")
 	@Timed
-	public Response queueAllForRefresh(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer queueAllForRefresh(@Parameter(hidden = true) @SecurityCheck User user) {
 		feedSubscriptionService.refreshAll(user);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@Path("/refresh")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Queue a feed for refresh", description = "Manually add a feed to the refresh queue")
 	@Timed
-	public Response queueForRefresh(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer queueForRefresh(@Parameter(hidden = true) @SecurityCheck User user,
 			@Parameter(description = "Feed id", required = true) IDRequest req) {
 
 		Preconditions.checkNotNull(req);
@@ -302,17 +295,16 @@ public class FeedREST {
 		if (sub != null) {
 			Feed feed = sub.getFeed();
 			feedRefreshEngine.refreshImmediately(feed);
-			return Response.ok().build();
+			return Answer.ok().build();
 		}
-		return Response.ok(Status.NOT_FOUND).build();
+		return Answer.ok(Status.NOT_FOUND).build();
 	}
 
 	@Path("/mark")
 	@POST
-	@UnitOfWork
 	@Operation(summary = "Mark feed entries", description = "Mark feed entries as read (unread is not supported)")
 	@Timed
-	public Response markFeedEntries(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer markFeedEntries(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "Mark request", required = true) MarkRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -327,45 +319,43 @@ public class FeedREST {
 			feedEntryService.markSubscriptionEntries(user, Collections.singletonList(subscription), olderThan, insertedBefore,
 					entryKeywords);
 		}
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@GET
 	@Path("/get/{id}")
-	@UnitOfWork
 	@Operation(
 			summary = "get feed",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Subscription.class))) })
 	@Timed
-	public Response getFeed(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer getFeed(@Parameter(hidden = true) @SecurityCheck User user,
 			@Parameter(description = "user id", required = true) @PathParam("id") Long id) {
 
 		Preconditions.checkNotNull(id);
 		FeedSubscription sub = feedSubscriptionDAO.findById(user, id);
 		if (sub == null) {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 		UnreadCount unreadCount = feedSubscriptionService.getUnreadCount(user).get(id);
-		return Response.ok(Subscription.build(sub, unreadCount)).build();
+		return Answer.ok(Subscription.build(sub, unreadCount)).build();
 	}
 
 	@GET
 	@Path("/favicon/{id}")
-	@UnitOfWork
 	@Operation(summary = "Fetch a feed's icon", description = "Fetch a feed's icon")
 	@Timed
-	public Response getFeedFavicon(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer getFeedFavicon(@Parameter(hidden = true) @SecurityCheck User user,
 			@Parameter(description = "subscription id", required = true) @PathParam("id") Long id) {
 
 		Preconditions.checkNotNull(id);
 		FeedSubscription subscription = feedSubscriptionDAO.findById(user, id);
 		if (subscription == null) {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 
 		Feed feed = subscription.getFeed();
 		Favicon icon = feedService.fetchFavicon(feed);
-		ResponseBuilder builder = Response.ok(icon.getIcon(), icon.getMediaType());
+		Answer.Builder builder = Answer.ok(icon.getIcon(), icon.getMediaType().toString());
 
 		CacheControl cacheControl = new CacheControl();
 		cacheControl.setMaxAge(2592000);
@@ -382,13 +372,12 @@ public class FeedREST {
 
 	@POST
 	@Path("/subscribe")
-	@UnitOfWork
 	@Operation(
 			summary = "Subscribe to a feed",
 			description = "Subscribe to a feed",
 			responses = { @ApiResponse(content = @Content(schema = @Schema(implementation = Long.class))) })
 	@Timed
-	public Response subscribe(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer subscribe(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "subscription request", required = true) SubscribeRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getTitle());
@@ -402,10 +391,10 @@ public class FeedREST {
 
 			FeedInfo info = fetchFeedInternal(prependHttp(req.getUrl()));
 			long subscriptionId = feedSubscriptionService.subscribe(user, info.getUrl(), req.getTitle(), category);
-			return Response.ok(subscriptionId).build();
+			return Answer.ok(subscriptionId).build();
 		} catch (Exception e) {
 			log.error("Failed to subscribe to URL {}: {}", req.getUrl(), e.getMessage(), e);
-			return Response.status(Status.SERVICE_UNAVAILABLE)
+			return Answer.status(Status.SERVICE_UNAVAILABLE)
 					.entity("Failed to subscribe to URL " + req.getUrl() + ": " + e.getMessage())
 					.build();
 		}
@@ -413,10 +402,9 @@ public class FeedREST {
 
 	@GET
 	@Path("/subscribe")
-	@UnitOfWork
 	@Operation(summary = "Subscribe to a feed", description = "Subscribe to a feed")
 	@Timed
-	public Response subscribeFromUrl(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer subscribeFromUrl(@Parameter(hidden = true) @SecurityCheck User user,
 			@Parameter(description = "feed url", required = true) @QueryParam("url") String url) {
 		try {
 			Preconditions.checkNotNull(url);
@@ -425,7 +413,7 @@ public class FeedREST {
 		} catch (Exception e) {
 			log.info("Could not subscribe to url {} : {}", url, e.getMessage());
 		}
-		return Response.temporaryRedirect(URI.create(config.getApplicationSettings().getPublicUrl())).build();
+		return Answer.temporaryRedirect(URI.create(config.getApplicationSettings().getPublicUrl())).build();
 	}
 
 	private String prependHttp(String url) {
@@ -437,27 +425,25 @@ public class FeedREST {
 
 	@POST
 	@Path("/unsubscribe")
-	@UnitOfWork
 	@Operation(summary = "Unsubscribe from a feed", description = "Unsubscribe from a feed")
 	@Timed
-	public Response unsubscribe(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) IDRequest req) {
+	public Answer unsubscribe(@Parameter(hidden = true) @SecurityCheck User user, @Parameter(required = true) IDRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
 
 		boolean deleted = feedSubscriptionService.unsubscribe(user, req.getId());
 		if (deleted) {
-			return Response.ok().build();
+			return Answer.ok().build();
 		} else {
-			return Response.status(Status.NOT_FOUND).build();
+			return Answer.status(Status.NOT_FOUND).build();
 		}
 	}
 
 	@POST
 	@Path("/modify")
-	@UnitOfWork
 	@Operation(summary = "Modify a subscription", description = "Modify a feed subscription")
 	@Timed
-	public Response modifyFeed(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer modifyFeed(@Parameter(hidden = true) @SecurityCheck User user,
 			@Valid @Parameter(description = "subscription id", required = true) FeedModificationRequest req) {
 		Preconditions.checkNotNull(req);
 		Preconditions.checkNotNull(req.getId());
@@ -465,7 +451,7 @@ public class FeedREST {
 		try {
 			feedEntryFilteringService.filterMatchesEntry(req.getFilter(), TEST_ENTRY);
 		} catch (FeedEntryFilterException e) {
-			return Response.status(Status.BAD_REQUEST).entity(e.getCause().getMessage()).type(MediaType.TEXT_PLAIN).build();
+			return Answer.status(Status.BAD_REQUEST).entity(e.getCause().getMessage()).type(MediaType.TEXT_PLAIN).build();
 		}
 
 		FeedSubscription subscription = feedSubscriptionDAO.findById(user, req.getId());
@@ -504,46 +490,44 @@ public class FeedREST {
 			feedSubscriptionDAO.saveOrUpdate(subscription);
 		}
 		cache.invalidateUserRootCategory(user);
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@POST
 	@Path("/import")
-	@UnitOfWork
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
 	@Operation(summary = "OPML import", description = "Import an OPML file, posted as a FORM with the 'file' name")
 	@Timed
-	public Response importOpml(@Parameter(hidden = true) @SecurityCheck User user,
+	public Answer importOpml(@Parameter(hidden = true) @SecurityCheck User user,
 			@Parameter(description = "ompl file", required = true) @FormDataParam("file") InputStream input) {
 		if (CommaFeedApplication.USERNAME_DEMO.equals(user.getName())) {
-			return Response.status(Status.FORBIDDEN).entity("Import is disabled for the demo account").build();
+			return Answer.status(Status.FORBIDDEN).entity("Import is disabled for the demo account").build();
 		}
 		try {
 			String opml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
 			opmlImporter.importOpml(user, opml);
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
-			throw new WebApplicationException(Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+			throw new AnswerException(Answer.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
-		return Response.ok().build();
+		return Answer.ok().build();
 	}
 
 	@GET
 	@Path("/export")
-	@UnitOfWork
 	@Produces(MediaType.APPLICATION_XML)
 	@Operation(summary = "OPML export", description = "Export an OPML file of the user's subscriptions")
 	@Timed
-	public Response exportOpml(@Parameter(hidden = true) @SecurityCheck User user) {
+	public Answer exportOpml(@Parameter(hidden = true) @SecurityCheck User user) {
 		Opml opml = opmlExporter.export(user);
 		WireFeedOutput output = new WireFeedOutput();
 		String opmlString;
 		try {
 			opmlString = output.outputString(opml);
 		} catch (Exception e) {
-			return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e).build();
+			return Answer.status(Status.INTERNAL_SERVER_ERROR).entity(e).build();
 		}
-		return Response.ok(opmlString).build();
+		return Answer.ok(opmlString).build();
 	}
 
 }
